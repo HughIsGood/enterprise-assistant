@@ -34,8 +34,8 @@ public class DocumentService {
         if (text.isBlank()) {
             throw new IllegalArgumentException("Uploaded file content is empty");
         }
-
-        Document document = Document.from(text, Metadata.from(Map.of("document_type", documentType.getDesc())));
+        Document document = Document.from(text, Metadata.from(Map.of(
+                "document_type", documentType.getDesc(), "document_name", file.getName())));
         documentRepository.ingest(document);
     }
 
