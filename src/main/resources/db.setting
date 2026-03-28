@@ -1,0 +1,9 @@
+## db.setting文件
+url = jdbc:mysql://localhost:3306/langchain4j
+user = root
+pass = root
+## 可选配置
+# 是否在日志中显示执行的SQL
+formatSql = false
+# 是否显示SQL参数
+showParams = true
