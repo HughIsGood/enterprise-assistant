@@ -7,9 +7,10 @@ import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore;
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+import org.weihua.model.document.DocumentType;
 
-@Configuration
+@Component
 public class EmbeddingStoreConfig {
 
     private final EmbeddingModel embeddingModel;
@@ -23,7 +24,7 @@ public class EmbeddingStoreConfig {
 
     @Bean
     public EmbeddingStore<TextSegment> embeddingStore() {
-        PineconeEmbeddingStore embeddingStore = PineconeEmbeddingStore.builder()
+        return PineconeEmbeddingStore.builder()
                 .apiKey(pineConeApiKey)
                 .index("enterprise-index")
                 .nameSpace("enterprise-namespace")
@@ -33,6 +34,17 @@ public class EmbeddingStoreConfig {
                         .dimension(embeddingModel.dimension())
                         .build())
                 .build();
-        return embeddingStore;
+    }
+
+    private String resolveMetadataTextKey(DocumentType documentType) {
+        if (documentType == null) {
+            throw new IllegalArgumentException("documentType must not be null");
+        }
+        return switch (documentType) {
+            case POLICY -> "POLICY";
+            case TECH_TYPE -> "TECH_TYPE";
+            case SOP -> "SOP";
+            case FAQ -> "FAQ";
+        };
     }
 }

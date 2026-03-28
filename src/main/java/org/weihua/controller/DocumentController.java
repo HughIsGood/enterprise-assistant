@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.weihua.model.document.DocumentType;
 import org.weihua.service.DocumentService;
 
 import java.util.Map;
@@ -21,11 +22,13 @@ public class DocumentController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, String>> upload(@RequestParam("file") MultipartFile file) {
-        documentService.uploadAndTrunkFile(file);
+    public ResponseEntity<Map<String, String>> upload(@RequestParam("file") MultipartFile file,
+                                                      @RequestParam("docType") DocumentType docType) {
+        documentService.uploadAndTrunkFile(file, docType);
         return ResponseEntity.ok(Map.of(
                 "message", "Document uploaded and ingested successfully",
-                "fileName", file.getOriginalFilename() == null ? "unknown" : file.getOriginalFilename()
+                "fileName", file.getOriginalFilename() == null ? "unknown" : file.getOriginalFilename(),
+                "docType", docType.name()
         ));
     }
 }

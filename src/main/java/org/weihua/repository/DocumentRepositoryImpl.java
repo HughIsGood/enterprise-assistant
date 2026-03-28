@@ -22,14 +22,15 @@ public class DocumentRepositoryImpl implements DocumentRepository {
 
     @Override
     public void ingest(Document document) {
-        log.info("begin to ingest file text.");
+        log.info("begin to ingest file text");
+
         EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-                .documentSplitter(DocumentSplitters.recursive(300, 30))
+                .documentSplitter(DocumentSplitters.recursive(100, 30))
                 .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
                 .build();
 
         ingestor.ingest(document);
-        log.info("ingest file text success.");
+        log.info("ingest file text success");
     }
 }
