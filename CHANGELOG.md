@@ -1,4 +1,4 @@
-﻿# CHANGELOG
+# CHANGELOG
 
 本文件用于记录每个版本的功能变更，便于回溯开发历史。
 
@@ -6,6 +6,28 @@
 - 每次提交代码后，同步更新一条版本记录。
 - 按时间倒序维护（最新版本放最上面）。
 - 重点写清楚：新增功能、优化、修复、影响范围。
+
+---
+
+## [v0.1.4] - 2026-03-30
+- Commit: `TBD`
+- 标题: `feat: agent-only frontend and router-driven document type`
+
+### 新增
+- 路由输出新增 `documentType` 字段，格式统一为：`intentType / reason / documentType`。
+- `IntentDecision` 增加 `documentType` 字段，并在 `IntentRouterService` 完成解析。
+
+### 优化
+- `AgentWorkflowService#handleActionRequest` 改为直接使用路由结果中的 `documentType` 执行文档工具。
+- 前端页面改为仅保留 Agent 问答入口，移除普通对话按钮与 `/api/chat/dialogue` 调用。
+- `README.md` 更新为当前 Agent 主流程文档。
+
+### 修复
+- `/api/chat/agent/approve` 参数绑定改为 `@RequestParam("token")`，避免未开启 `-parameters` 时反射报错。
+- 修复多处中文乱码与 BOM 编码问题，避免 `illegal character: '﻿'`。
+
+### 影响范围
+- 路由、工作流、审批接口、前端交互与项目文档。
 
 ---
 

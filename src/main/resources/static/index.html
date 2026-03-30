@@ -12,6 +12,8 @@
             --muted: #4f5d75;
             --primary: #1565c0;
             --primary-hover: #0d47a1;
+            --secondary: #197a43;
+            --secondary-hover: #0f5a2f;
             --danger: #b00020;
             --ok: #1b5e20;
             --border: #d6deeb;
@@ -108,7 +110,12 @@
             transition: background 0.2s ease;
         }
 
+        .btn-secondary {
+            background: var(--secondary);
+        }
+
         button:hover:enabled { background: var(--primary-hover); }
+        .btn-secondary:hover:enabled { background: var(--secondary-hover); }
         button:disabled { opacity: 0.65; cursor: not-allowed; }
 
         .status {
@@ -161,16 +168,15 @@
             margin-bottom: 4px;
         }
 
-        .chat-actions {
+        .chat-buttons {
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
             gap: 12px;
-            align-items: end;
         }
 
         @media (max-width: 640px) {
             .card { padding: 16px; }
-            .chat-actions { grid-template-columns: 1fr; }
+            .chat-buttons { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -197,14 +203,17 @@
 
     <div class="card">
         <h1>模型对话</h1>
-        <p>调用 <code>/api/chat/dialogue</code>，同一 <code>userId</code> 自动保持多轮记忆。</p>
+        <p>
+            Agent 问答：<code>/api/chat/agent/ask</code><br/>
+            审批接口：<code>/api/chat/agent/approve</code>（Agent 返回 ACTION_REQUEST 后会弹窗确认）
+        </p>
 
         <div class="row">
             <input id="userIdInput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="请输入数字 userId（留空默认 666）" />
             <div id="chatLog" class="chat-log"></div>
-            <div class="chat-actions">
-                <textarea id="messageInput" placeholder="请输入你的问题"></textarea>
-                <button id="sendBtn" type="button">发送</button>
+            <textarea id="messageInput" placeholder="请输入你的问题"></textarea>
+            <div class="chat-buttons">
+                <button id="agentAskBtn" type="button" class="btn-secondary">Agent 问答</button>
             </div>
         </div>
 
@@ -220,7 +229,7 @@
 
     const userIdInput = document.getElementById('userIdInput');
     const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
+    const agentAskBtn = document.getElementById('agentAskBtn');
     const chatLog = document.getElementById('chatLog');
     const chatStatusEl = document.getElementById('chatStatus');
 
@@ -249,6 +258,26 @@
         chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    function parseResponsePayload(response, payload) {
+        if (!response.ok) {
+            const errMsg = typeof payload === 'string' ? payload : JSON.stringify(payload);
+            throw new Error(errMsg || '请求失败');
+        }
+        return payload;
+    }
+
+    function resolveUserId() {
+        let userId = userIdInput.value.trim();
+        if (!userId) {
+            userId = '666';
+            userIdInput.value = userId;
+        }
+        if (!/^\d+$/.test(userId)) {
+            throw new Error('userId 只能是数字');
+        }
+        return userId;
+    }
+
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files && fileInput.files[0];
         const docType = docTypeSelect.value;
@@ -275,17 +304,8 @@
             });
 
             const contentType = response.headers.get('content-type') || '';
-            let payload;
-            if (contentType.includes('application/json')) {
-                payload = await response.json();
-            } else {
-                payload = await response.text();
-            }
-
-            if (!response.ok) {
-                const errMsg = typeof payload === 'string' ? payload : JSON.stringify(payload);
-                throw new Error(errMsg || '上传失败');
-            }
+            const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+            parseResponsePayload(response, payload);
 
             const okMsg = typeof payload === 'string'
                 ? payload
@@ -298,70 +318,83 @@
         }
     });
 
-    async function sendMessage() {
-        let userId = userIdInput.value.trim();
+    async function approveAgentAction(token) {
+        const response = await fetch(`/api/chat/agent/approve?token=${encodeURIComponent(token)}`, {
+            method: 'POST'
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+        parseResponsePayload(response, payload);
+
+        return typeof payload === 'string' ? payload : (payload.answer || '审批执行完成');
+    }
+
+    async function sendAgentAsk() {
         const message = messageInput.value.trim();
-
-        if (!userId) {
-            userId = '666';
-            userIdInput.value = userId;
-        }
-
-        if (!/^\d+$/.test(userId)) {
-            setStatus(chatStatusEl, 'userId 只能是数字', 'err');
-            return;
-        }
-
         if (!message) {
             setStatus(chatStatusEl, '请输入消息内容', 'err');
             return;
         }
 
-        sendBtn.disabled = true;
-        appendMessage('user', message);
-        setStatus(chatStatusEl, '正在生成回复...');
-
         try {
-            const response = await fetch('/api/chat/dialogue', {
+            const userId = resolveUserId();
+            agentAskBtn.disabled = true;
+            appendMessage('user', message);
+            setStatus(chatStatusEl, 'Agent 问答处理中...');
+
+            const response = await fetch('/api/chat/agent/ask', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, message })
             });
 
             const contentType = response.headers.get('content-type') || '';
-            let payload;
-            if (contentType.includes('application/json')) {
-                payload = await response.json();
+            const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+            parseResponsePayload(response, payload);
+
+            const answer = typeof payload === 'string' ? payload : (payload.answer || 'Agent 未返回内容');
+            const intentType = payload && payload.intentType ? `\n意图: ${payload.intentType}` : '';
+            const tools = payload && payload.usedTools && payload.usedTools.length
+                ? `\n使用工具: ${payload.usedTools.join(', ')}`
+                : '';
+
+            appendMessage('assistant', `${answer}${intentType}${tools}`);
+
+            if (payload && payload.intentType === 'ACTION_REQUEST') {
+                if (payload.approvalRequired && payload.approvalToken) {
+                    const confirmed = window.confirm('Agent 请求执行敏感操作，是否确认继续？');
+                    if (confirmed) {
+                        setStatus(chatStatusEl, '已确认，正在执行审批...');
+                        const approveAnswer = await approveAgentAction(payload.approvalToken);
+                        appendMessage('assistant', approveAnswer);
+                        setStatus(chatStatusEl, '审批执行完成', 'ok');
+                    } else {
+                        setStatus(chatStatusEl, '你已取消审批执行', 'ok');
+                    }
+                } else {
+                    setStatus(chatStatusEl, '当前 ACTION_REQUEST 无需审批或未返回 token', 'ok');
+                }
             } else {
-                payload = await response.text();
+                setStatus(chatStatusEl, 'Agent 问答完成', 'ok');
             }
 
-            if (!response.ok) {
-                const errMsg = typeof payload === 'string' ? payload : JSON.stringify(payload);
-                throw new Error(errMsg || '对话失败');
-            }
-
-            const answer = typeof payload === 'string' ? payload : (payload.answer || '');
-            appendMessage('assistant', answer || '模型未返回内容');
-            setStatus(chatStatusEl, '回复成功', 'ok');
             messageInput.value = '';
         } catch (e) {
             appendMessage('assistant', `请求失败: ${e.message}`);
-            setStatus(chatStatusEl, `对话失败: ${e.message}`, 'err');
+            setStatus(chatStatusEl, `Agent 问答失败: ${e.message}`, 'err');
         } finally {
-            sendBtn.disabled = false;
+            agentAskBtn.disabled = false;
             messageInput.focus();
         }
     }
 
-    sendBtn.addEventListener('click', sendMessage);
+    agentAskBtn.addEventListener('click', sendAgentAsk);
 
     messageInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
-            sendMessage();
+            sendAgentAsk();
         }
     });
 </script>

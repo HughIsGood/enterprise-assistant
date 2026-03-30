@@ -12,11 +12,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
         chatModel = "anthropicChatModel",
         chatMemoryProvider = "chatMySqlMemoryProvider"
 )
-public interface ChatAssistant {
+public interface KnowledgeAssistant {
 
     @SystemMessage(fromResource = "enterprise_system_message.txt")
     @UserMessage(fromResource = "enterprise_user_message.txt")
-    String chat(@MemoryId String memoryId,
-                @V("context") String context,
-                @V("question") String question);
+    String answer(@MemoryId String memoryId,
+                  @V("context") String context,
+                  @V("question") String question);
 }

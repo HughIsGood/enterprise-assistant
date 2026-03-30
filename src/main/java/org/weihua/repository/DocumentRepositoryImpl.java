@@ -8,7 +8,6 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
@@ -27,20 +26,6 @@ public class DocumentRepositoryImpl implements DocumentRepository {
         this.embeddingStore = embeddingStore;
         this.embeddingModel = embeddingModel;
     }
-
-//    @Override
-//    public void ingest(Document document) {
-//        log.info("begin to ingest file text");
-//
-//        EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-//                .documentSplitter(DocumentSplitters.recursive(100, 30))
-//                .embeddingModel(embeddingModel)
-//                .embeddingStore(embeddingStore)
-//                .build();
-//
-//        ingestor.ingest(document);
-//        log.info("ingest file text success");
-//    }
 
     @Override
     public void ingest(Document document) {

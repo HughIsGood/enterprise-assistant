@@ -16,4 +16,12 @@ public class MemoryProviderConfig {
                 .maxMessages(10)
                 .chatMemoryStore(new ChatMemoryRepository()).build();
     }
+
+    @Bean
+    ChatMemoryProvider routerMySqlMemoryProvider() {
+        return memoryId -> MessageWindowChatMemory.builder()
+                .id(memoryId)
+                .maxMessages(10)
+                .chatMemoryStore(new ChatMemoryRepository()).build();
+    }
 }
