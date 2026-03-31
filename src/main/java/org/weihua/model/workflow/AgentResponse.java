@@ -1,5 +1,6 @@
 package org.weihua.model.workflow;
 
+import java.io.Serializable;
 import java.util.List;
 
 public record AgentResponse(
@@ -8,7 +9,7 @@ public record AgentResponse(
         List<String> usedTools,
         boolean approvalRequired,
         String approvalToken
-) {
+) implements Serializable {
     public static AgentResponse answer(String intentType,
                                        String answer,
                                        List<String> usedTools,

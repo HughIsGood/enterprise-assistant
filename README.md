@@ -24,39 +24,91 @@
 - 接口：`POST /api/chat/agent/approve?token=...`
 - ACTION_REQUEST 需要审批时，前端弹窗确认后调用
 
-4. 路由输出文档类型并驱动工具执行
-- 路由模型输出：`intentType` / `reason` / `documentType`
-- `AgentWorkflowService#handleActionRequest` 直接消费 `documentType` 执行文档工具
+4. 动作命令与混合模式工具执行
+- 路由输出结构化命令：`ActionCommand(ActionType, documentType, keyword, documentId, title, content)`
+- `ActionType`：`LIST_DOCUMENTS` / `SEARCH_DOCUMENTS` / `GET_DOCUMENT_DETAIL` / `CREATE_TICKET`
+- 保留 `ActionCommand` 强约束路由，执行层使用 LangChain4j `@Tool` 注册方式统一分发
 
-5. 兼容接口（已废弃）
-- `POST /api/chat/dialogue` 保留兼容，后端已标记 `@Deprecated`
+5. 任务型 Agent 编排（LangGraph4j）
+- 使用 `TaskOrchestratorService` + `StateGraph` 构建节点流
+- 核心节点：`plan` / `action` / `approval` / `knowledgeQa` / `processQa` / `clarification`
+- 形成“计划 -> 执行 -> 观察 -> 再计划”闭环
 
 ## 架构图
 ```mermaid
 flowchart LR
     U[Web User] --> FE[Static Frontend index.html]
-    FE --> DOC[DocumentController]
     FE --> CHAT[ChatController]
+    FE --> DOC[DocumentController]
 
     DOC --> DS[DocumentService]
     DS --> DR[DocumentRepositoryImpl]
     DR --> PC[(Pinecone)]
 
-    CHAT --> AWS[AgentWorkflowService]
-    AWS --> IRS[IntentRouterService]
+    CHAT --> TO[TaskOrchestratorService]
+    CHAT --> TA[Task API: /agent/tasks/{taskId}]
+
+    TO --> TP[TaskPlannerService]
+    TP --> IRS[IntentRouterService]
     IRS --> RA[RouterAssistant]
 
-    AWS --> RET[RetrievalService]
-    RET --> KR[KnowledgeRetriever]
-    KR --> PC
+    TO --> TE[TaskExecutionService]
+    TE --> TES[ToolExecutionService]
+    TES --> DT[DocumentTool @Tool]
+    TES --> TT[TicketTool @Tool]
 
-    AWS --> KA[KnowledgeAssistant]
-    AWS --> TES[ToolExecutionService]
-    TES --> DT[DocumentTool]
-    TES --> TT[TicketTool]
+    TO --> TR[RetrievalService]
+    TO --> KA[KnowledgeAssistant]
+    TO --> TAS[TaskApprovalService]
+    TO --> TRepo[TaskRepository]
+    TO --> TSRepo[TaskStepRepository]
+```
 
-    AWS --> APS[ApprovalService]
-    CHAT --> APS
+### 流程图（计划-执行-观察-再计划）
+```mermaid
+flowchart TD
+    A[POST /api/chat/agent/ask] --> B[TaskOrchestratorService.runGraph]
+    B --> C[plan 节点: TaskPlannerService.route]
+    C --> D{intentType}
+
+    D -->|KNOWLEDGE_QA| K[knowledgeQa 节点: 检索+回答]
+    D -->|PROCESS_QA| P[processQa 节点: 检索+回答]
+    D -->|ACTION_REQUEST| E{actionType}
+    D -->|CLARIFICATION| Q[clarification 节点]
+
+    E -->|CREATE_TICKET| AP[approval 节点: 生成 approvalToken]
+    E -->|其他动作| T[action 节点: 执行工具]
+
+    T --> O[写入 observation]
+    O --> C
+
+    K --> END((END))
+    P --> END
+    Q --> END
+    AP --> END
+```
+
+### 审批交互示意图
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant API as ChatController
+    participant TO as TaskOrchestratorService
+    participant TAS as TaskApprovalService
+    participant TES as ToolExecutionService
+
+    FE->>API: POST /api/chat/agent/ask\nmessage=帮我创建工单
+    API->>TO: askSync(...)
+    TO->>TAS: createPendingApproval(taskId, stepNo, action)
+    TO-->>API: approvalRequired=true, approvalToken
+    API-->>FE: 返回确认弹窗信息
+
+    FE->>API: POST /api/chat/agent/approve?token=...
+    API->>TO: approveAndContinue(token)
+    TO->>TAS: approve(token)
+    TO->>TES: execute(actionCommand)
+    TO-->>API: 直接返回工具执行结果（完成任务）
+    API-->>FE: 展示执行结果
 ```
 
 ## 数据流
@@ -66,17 +118,23 @@ flowchart LR
 - `DocumentService` 处理文本并写入文档元数据
 - `DocumentRepositoryImpl` 切分 + embedding + 写入向量库
 
-2. Agent 问答数据流
+2. Agent 问答数据流（任务编排）
 - 前端提交 `userId + message` 到 `/api/chat/agent/ask`
-- `IntentRouterService` 调用 `RouterAssistant` 生成路由结果（含 `documentType`）
-- `AgentWorkflowService` 分支执行：
-  - `KNOWLEDGE_QA` / `PROCESS_QA`：检索上下文后调用 `KnowledgeAssistant`
-  - `ACTION_REQUEST`：调用工具（文档查询 / 工单审批流程）
+- `TaskOrchestratorService` 启动 LangGraph4j 图执行（`plan/action/approval/knowledgeQa/processQa/clarification`）
+- `plan` 节点由 `IntentRouterService + RouterAssistant` 产出 `IntentDecision(ActionCommand)`
+- `ACTION_REQUEST` 非审批动作进入 `action` 节点，执行后带 observation 回到 `plan`，形成多步闭环
+- `KNOWLEDGE_QA/PROCESS_QA` 走不同检索参数后由 `KnowledgeAssistant` 生成答案
 
 3. 审批数据流
-- ACTION_REQUEST 返回 `approvalRequired=true` 与 `approvalToken`
+- `CREATE_TICKET` 在 `approval` 节点返回 `approvalRequired=true` 与 `approvalToken`
 - 前端确认后调用 `/api/chat/agent/approve?token=...`
-- `ApprovalService` 校验并执行对应工具
+- `approveAndContinue` 直接执行工具并返回结果，不再二次路由
+
+4. 可观测性数据流
+- 检索层输出 score 与命中文档日志
+- 路由层输出原始/解析结果日志
+- 工具层输出调用起止日志
+- 任务层输出步骤落库（`TaskStep`）与状态流转日志
 
 ## 运行方式
 ### 1) 环境要求

@@ -1,7 +1,10 @@
 package org.weihua.model.workflow;
 
+import java.io.Serializable;
+
 public record IntentDecision(
         IntentType intentType,
         String reason,
-        String documentType
-) {}
+        ActionCommand actionCommand
+) implements Serializable {}
+

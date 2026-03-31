@@ -1,0 +1,12 @@
+{"level":30,"time":1774918171915,"pid":14228,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774918171916,"pid":14228,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}
+{"level":30,"time":1774918235490,"pid":6896,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774918235491,"pid":6896,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}
+{"level":30,"time":1774919261635,"pid":13524,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774919261635,"pid":13524,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}
+{"level":30,"time":1774919371241,"pid":6768,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774919371242,"pid":6768,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}
+{"level":30,"time":1774919575787,"pid":23432,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774919575787,"pid":23432,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}
+{"level":30,"time":1774923774397,"pid":1288,"hostname":"LAPTOP-6G42DLC6","msg":"config>{\"host\":\"127.0.0.1\",\"user\":\"root\",\"password\":\"******\",\"database\":\"langchain4j\",\"port\":3306}"}
+{"level":30,"time":1774923774397,"pid":1288,"hostname":"LAPTOP-6G42DLC6","msg":"MySQL MCP server running on stdio"}

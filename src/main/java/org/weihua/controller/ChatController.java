@@ -4,13 +4,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.weihua.model.chat.ChatRequest;
 import org.weihua.model.chat.ChatResponse;
-import org.weihua.model.tools.ToolCallResult;
-import org.weihua.model.workflow.AgentContext;
+import org.weihua.model.task.Task;
+import org.weihua.model.task.TaskStep;
 import org.weihua.model.workflow.AgentResponse;
-import org.weihua.service.ApprovalService;
 import org.weihua.service.ChatService;
-import org.weihua.service.tools.ToolExecutionService;
-import org.weihua.service.workflow.AgentWorkflowService;
+import org.weihua.service.task.TaskOrchestratorService;
 
 import java.util.List;
 
@@ -19,18 +17,12 @@ import java.util.List;
 public class ChatController {
 
     private final ChatService chatService;
-    private final AgentWorkflowService agentWorkflowService;
-    private final ApprovalService approvalService;
-    private final ToolExecutionService toolExecutionService;
+    private final TaskOrchestratorService taskOrchestratorService;
 
     public ChatController(ChatService chatService,
-                          AgentWorkflowService agentWorkflowService,
-                          ApprovalService approvalService,
-                          ToolExecutionService toolExecutionService) {
+                          TaskOrchestratorService taskOrchestratorService) {
         this.chatService = chatService;
-        this.agentWorkflowService = agentWorkflowService;
-        this.approvalService = approvalService;
-        this.toolExecutionService = toolExecutionService;
+        this.taskOrchestratorService = taskOrchestratorService;
     }
 
     @Deprecated
@@ -42,28 +34,21 @@ public class ChatController {
 
     @PostMapping("/agent/ask")
     public AgentResponse ask(@RequestBody ChatRequest request) {
-        return agentWorkflowService.handle(request.userId(), request.message());
+        return taskOrchestratorService.askSync(request.userId(), request.message());
     }
 
     @PostMapping("/agent/approve")
     public AgentResponse approve(@RequestParam("token") String token) {
-        AgentContext context = approvalService.approve(token);
+        return taskOrchestratorService.approveAndContinue(token);
+    }
 
-        if (context == null) {
-            return AgentResponse.answer("ACTION_REQUEST", "No pending approval found.", List.of(), false, null);
-        }
+    @GetMapping("/agent/tasks/{taskId}")
+    public TaskDetailResponse taskDetail(@PathVariable String taskId) {
+        Task task = taskOrchestratorService.getTask(taskId);
+        List<TaskStep> steps = taskOrchestratorService.getTaskSteps(taskId);
+        return new TaskDetailResponse(task, steps);
+    }
 
-        ToolCallResult result = toolExecutionService.executeCreateTicket(
-                "User support request",
-                context.getUserInput()
-        );
-
-        return AgentResponse.answer(
-                "ACTION_REQUEST",
-                result.result(),
-                List.of(result.toolName()),
-                false,
-                null
-        );
+    public record TaskDetailResponse(Task task, List<TaskStep> steps) {
     }
 }

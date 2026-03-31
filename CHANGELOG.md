@@ -9,6 +9,49 @@
 
 ---
 
+
+## [v0.1.6] - 2026-03-31
+- Commit: `TBD`
+- 标题: `docs: add task-agent flowcharts and approval sequence diagram`
+
+### 新增
+- README 新增任务型 Agent 编排流程图（计划-执行-观察-再计划）。
+- README 新增审批交互示意图（ask -> approve 闭环）。
+
+### 优化
+- README 架构图更新为 `TaskOrchestratorService + LangGraph4j` 主链路。
+- README 数据流同步更新为任务编排与审批直返结果逻辑。
+
+### 修复
+- 文档说明与当前实现不一致的部分已对齐。
+
+### 影响范围
+- README、CHANGELOG。
+
+---
+## [v0.1.5] - 2026-03-30
+- Commit: `TBD`
+- 标题: `refactor: action-command hybrid tool execution and observability logs`
+
+### 新增
+- 新增动作模型：`ActionType`、`ActionCommand`。
+- 新增 `RouterAssistant` 提示词资源文件：`router_system_message.txt`、`router_user_message.txt`。
+- 新增 `AgentWorkflowService` 的 SpringBootTest：覆盖知识问答、流程问答、动作执行与审批路径。
+
+### 优化
+- 将动作请求执行升级为混合模式：
+  - 路由层保留 `ActionCommand` 强约束输出；
+  - 执行层引入 LangChain4j `@Tool` 注册扫描与统一分发。
+- `RetrievalService#retrieve` 支持参数化输入 `maxResults/minScore`，并在 Knowledge/Process 场景使用不同召回参数。
+
+### 修复
+- 修复若干编码与提示词配置问题（统一 UTF-8 无 BOM）。
+
+### 影响范围
+- 路由、工作流、工具执行、测试与文档。
+
+---
+
 ## [v0.1.4] - 2026-03-30
 - Commit: `TBD`
 - 标题: `feat: agent-only frontend and router-driven document type`
