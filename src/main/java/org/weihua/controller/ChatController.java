@@ -1,13 +1,10 @@
 package org.weihua.controller;
 
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.weihua.model.chat.ChatRequest;
-import org.weihua.model.chat.ChatResponse;
 import org.weihua.model.task.Task;
 import org.weihua.model.task.TaskStep;
 import org.weihua.model.workflow.AgentResponse;
-import org.weihua.service.ChatService;
 import org.weihua.service.task.TaskOrchestratorService;
 
 import java.util.List;
@@ -16,20 +13,10 @@ import java.util.List;
 @RequestMapping("/api/chat")
 public class ChatController {
 
-    private final ChatService chatService;
     private final TaskOrchestratorService taskOrchestratorService;
 
-    public ChatController(ChatService chatService,
-                          TaskOrchestratorService taskOrchestratorService) {
-        this.chatService = chatService;
+    public ChatController(TaskOrchestratorService taskOrchestratorService) {
         this.taskOrchestratorService = taskOrchestratorService;
-    }
-
-    @Deprecated
-    @PostMapping("/dialogue")
-    public ResponseEntity<ChatResponse> dialogue(@RequestBody ChatRequest request) {
-        String answer = chatService.chat(request.userId(), request.message());
-        return ResponseEntity.ok(new ChatResponse(answer));
     }
 
     @PostMapping("/agent/ask")

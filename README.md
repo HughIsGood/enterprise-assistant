@@ -45,7 +45,7 @@ flowchart LR
     DR --> PC[(Pinecone)]
 
     CHAT --> TO[TaskOrchestratorService]
-    CHAT --> TA[Task API: /agent/tasks/{taskId}]
+    CHAT --> TA[Task API: /agent/tasks/:taskId]
 
     TO --> TP[TaskPlannerService]
     TP --> IRS[IntentRouterService]
