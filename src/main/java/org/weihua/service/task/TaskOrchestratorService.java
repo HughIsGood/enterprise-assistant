@@ -233,7 +233,7 @@ public class TaskOrchestratorService {
         if (command.actionType() == ActionType.CREATE_TICKET) {
             return "APPROVAL";
         }
-        return "ACTION";
+        return "CLARIFICATION";
     }
 
     private Map<String, Object> actionNode(TaskGraphState state) {
@@ -393,26 +393,7 @@ public class TaskOrchestratorService {
     }
 
     private ActionCommand normalizeActionCommand(ActionCommand command) {
-        if (command == null || command.actionType() == null) {
-            return command;
-        }
-        if (command.actionType() != ActionType.LIST_DOCUMENTS) {
-            return command;
-        }
-
-        String documentType = command.documentType();
-        if (documentType == null || documentType.isBlank()) {
-            documentType = DocumentType.TECH_TYPE.name();
-        }
-
-        return new ActionCommand(
-                command.actionType(),
-                documentType,
-                command.keyword(),
-                command.documentId(),
-                command.title(),
-                command.content()
-        );
+        return command;
     }
 
     private Task newTask(String userId, String goal) {

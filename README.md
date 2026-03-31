@@ -25,8 +25,7 @@
 - ACTION_REQUEST 需要审批时，前端弹窗确认后调用
 
 4. 动作命令与混合模式工具执行
-- 路由输出结构化命令：`ActionCommand(ActionType, documentType, keyword, documentId, title, content)`
-- `ActionType`：`LIST_DOCUMENTS` / `SEARCH_DOCUMENTS` / `GET_DOCUMENT_DETAIL` / `CREATE_TICKET`
+- `ActionType`?`CREATE_TICKET`
 - 保留 `ActionCommand` 强约束路由，执行层使用 LangChain4j `@Tool` 注册方式统一分发
 
 5. 任务型 Agent 编排（LangGraph4j）

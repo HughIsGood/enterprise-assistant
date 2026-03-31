@@ -51,24 +51,14 @@ public class ToolExecutionService {
             throw new IllegalArgumentException("ActionCommand and actionType must not be null");
         }
 
-        return switch (command.actionType()) {
-            case LIST_DOCUMENTS -> executeDocumentList(command.documentType());
-            case SEARCH_DOCUMENTS -> executeDocumentSearch(command.keyword());
-            case GET_DOCUMENT_DETAIL -> executeDocumentDetail(command.documentId());
-            case CREATE_TICKET -> executeCreateTicket(command.title(), command.content());
-        };
+        return executeCreateTicket(command.title(), command.content());
     }
 
     public String resolveToolName(ActionType actionType) {
         if (actionType == null) {
             return "";
         }
-        return switch (actionType) {
-            case LIST_DOCUMENTS -> "listDocumentsByType";
-            case SEARCH_DOCUMENTS -> "searchDocumentNames";
-            case GET_DOCUMENT_DETAIL -> "getDocumentDetail";
-            case CREATE_TICKET -> "createSupportTicket";
-        };
+        return "createSupportTicket";
     }
 
     private ToolCallResult invokeByName(String toolName, Object... args) {

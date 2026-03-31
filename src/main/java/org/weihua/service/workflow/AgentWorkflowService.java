@@ -4,8 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.weihua.assistant.KnowledgeAssistant;
-import org.weihua.model.document.DocumentType;
-import org.weihua.model.tools.ToolCallResult;
 import org.weihua.model.workflow.ActionCommand;
 import org.weihua.model.workflow.ActionType;
 import org.weihua.model.workflow.AgentContext;
@@ -119,7 +117,7 @@ public class AgentWorkflowService {
                     context.getSessionId(), context.getUserInput());
             return AgentResponse.answer(
                     context.getIntentDecision().intentType().name(),
-                    "已识别为动作请求，但未路由到可执行动作。",
+                    "\u5df2\u8bc6\u522b\u4e3a\u52a8\u4f5c\u8bf7\u6c42\uff0c\u4f46\u672a\u8def\u7531\u5230\u53ef\u6267\u884c\u52a8\u4f5c\u3002",
                     List.of(),
                     false,
                     null
@@ -130,59 +128,21 @@ public class AgentWorkflowService {
         log.info("Action dispatch: sessionId={}, actionType={}, command={}",
                 context.getSessionId(), actionType, command);
 
-        return switch (actionType) {
-            case LIST_DOCUMENTS -> executeListDocuments(context, command);
-            case SEARCH_DOCUMENTS -> executeSearchDocuments(context, command);
-            case GET_DOCUMENT_DETAIL -> executeGetDocumentDetail(context, command);
-            case CREATE_TICKET -> createTicketWithApproval(context, command);
-        };
-    }
-
-    private AgentResponse executeListDocuments(AgentContext context, ActionCommand command) {
-        String documentType = normalizeDocumentType(command.documentType());
-        ActionCommand normalizedCommand = new ActionCommand(
-                command.actionType(),
-                documentType,
-                command.keyword(),
-                command.documentId(),
-                command.title(),
-                command.content()
-        );
-        ToolCallResult result = toolExecutionService.executeAction(normalizedCommand);
-        return toolResultResponse(context, result);
-    }
-
-    private AgentResponse executeSearchDocuments(AgentContext context, ActionCommand command) {
-        if (command.keyword() == null || command.keyword().isBlank()) {
+        if (actionType != ActionType.CREATE_TICKET) {
             return AgentResponse.answer(
                     context.getIntentDecision().intentType().name(),
-                    "SEARCH_DOCUMENTS 缺少 keyword。",
+                    "\u5f53\u524d ACTION_REQUEST \u4ec5\u652f\u6301 CREATE_TICKET \u52a8\u4f5c\u3002",
                     List.of(),
                     false,
                     null
             );
         }
-        ToolCallResult result = toolExecutionService.executeAction(command);
-        return toolResultResponse(context, result);
-    }
-
-    private AgentResponse executeGetDocumentDetail(AgentContext context, ActionCommand command) {
-        if (command.documentId() == null || command.documentId().isBlank()) {
-            return AgentResponse.answer(
-                    context.getIntentDecision().intentType().name(),
-                    "GET_DOCUMENT_DETAIL 缺少 documentId。",
-                    List.of(),
-                    false,
-                    null
-            );
-        }
-        ToolCallResult result = toolExecutionService.executeAction(command);
-        return toolResultResponse(context, result);
+        return createTicketWithApproval(context, command);
     }
 
     private AgentResponse createTicketWithApproval(AgentContext context, ActionCommand command) {
         Map<String, Object> params = context.getToolResults() == null ? new HashMap<>() : context.getToolResults();
-        params.put("title", defaultIfBlank(command.title(), "用户支持请求"));
+        params.put("title", defaultIfBlank(command.title(), "\u7528\u6237\u652f\u6301\u8bf7\u6c42"));
         params.put("content", defaultIfBlank(command.content(), context.getUserInput()));
         context.setToolResults(params);
 
@@ -191,32 +151,11 @@ public class AgentWorkflowService {
 
         return AgentResponse.answer(
                 context.getIntentDecision().intentType().name(),
-                "创建工单需要审批确认，是否继续？",
+                "\u521b\u5efa\u5de5\u5355\u9700\u8981\u5ba1\u6279\u786e\u8ba4\uff0c\u662f\u5426\u7ee7\u7eed\uff1f",
                 List.of(toolExecutionService.resolveToolName(ActionType.CREATE_TICKET)),
                 true,
                 approvalToken
         );
-    }
-
-    private AgentResponse toolResultResponse(AgentContext context, ToolCallResult result) {
-        return AgentResponse.answer(
-                context.getIntentDecision().intentType().name(),
-                result.result(),
-                List.of(result.toolName()),
-                false,
-                null
-        );
-    }
-
-    private String normalizeDocumentType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return DocumentType.TECH_TYPE.name();
-        }
-        try {
-            return DocumentType.valueOf(raw.trim().toUpperCase()).name();
-        } catch (Exception ignored) {
-            return DocumentType.TECH_TYPE.name();
-        }
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
@@ -226,7 +165,7 @@ public class AgentWorkflowService {
     private AgentResponse askForClarification(AgentContext context) {
         return AgentResponse.answer(
                 context.getIntentDecision().intentType().name(),
-                "我暂时无法准确判断你的请求类型。你是想查询知识、查看流程，还是执行某个动作？",
+                "\u6211\u6682\u65f6\u65e0\u6cd5\u51c6\u786e\u5224\u65ad\u4f60\u7684\u8bf7\u6c42\u7c7b\u578b\u3002\u4f60\u662f\u60f3\u67e5\u8be2\u77e5\u8bc6\u3001\u67e5\u770b\u6d41\u7a0b\uff0c\u8fd8\u662f\u6267\u884c\u67d0\u4e2a\u52a8\u4f5c\uff1f",
                 List.of(),
                 false,
                 null

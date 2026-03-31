@@ -87,27 +87,6 @@ class AgentWorkflowServiceTest {
     }
 
     @Test
-    void shouldExecuteListDocumentsAction() {
-        ActionCommand actionCommand = new ActionCommand(
-                ActionType.LIST_DOCUMENTS, "SOP", null, null, null, null
-        );
-        when(intentRouterService.route("列出SOP文档")).thenReturn(
-                new IntentDecision(IntentType.ACTION_REQUEST, "列文档", actionCommand)
-        );
-        when(toolExecutionService.executeAction(any(ActionCommand.class))).thenReturn(
-                new ToolCallResult("listDocumentsByType", "SOP文档A\nSOP文档B")
-        );
-
-        AgentResponse response = agentWorkflowService.handle("u3", "列出SOP文档");
-
-        assertEquals("ACTION_REQUEST", response.intentType());
-        assertEquals("SOP文档A\nSOP文档B", response.answer());
-        assertEquals(List.of("listDocumentsByType"), response.usedTools());
-        assertFalse(response.approvalRequired());
-        verify(toolExecutionService).executeAction(any(ActionCommand.class));
-    }
-
-    @Test
     void shouldRequireApprovalForCreateTicketAction() {
         ActionCommand actionCommand = new ActionCommand(
                 ActionType.CREATE_TICKET, null, null, null, "VPN无法登录", "今天上午开始无法连接"
