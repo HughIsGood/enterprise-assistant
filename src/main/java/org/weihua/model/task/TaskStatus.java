@@ -4,7 +4,7 @@ public enum TaskStatus {
     CREATED,
     RUNNING,
     WAITING_APPROVAL,
+    WAITING_CLARIFICATION,
     COMPLETED,
     FAILED
 }
-

@@ -2,6 +2,7 @@ package org.weihua.controller;
 
 import org.springframework.web.bind.annotation.*;
 import org.weihua.model.chat.ChatRequest;
+import org.weihua.model.chat.ClarifyRequest;
 import org.weihua.model.task.Task;
 import org.weihua.model.task.TaskStep;
 import org.weihua.model.workflow.AgentResponse;
@@ -27,6 +28,11 @@ public class ChatController {
     @PostMapping("/agent/approve")
     public AgentResponse approve(@RequestParam("token") String token) {
         return taskOrchestratorService.approveAndContinue(token);
+    }
+
+    @PostMapping("/agent/clarify")
+    public AgentResponse clarify(@RequestBody ClarifyRequest request) {
+        return taskOrchestratorService.clarifyAndContinue(request.taskId(), request.message());
     }
 
     @GetMapping("/agent/tasks/{taskId}")

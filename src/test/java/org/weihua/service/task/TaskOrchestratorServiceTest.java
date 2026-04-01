@@ -79,6 +79,7 @@ class TaskOrchestratorServiceTest {
         assertEquals("KNOWLEDGE_QA", response.intentType());
         assertEquals("answer", response.answer());
         assertFalse(response.approvalRequired());
+        assertFalse(response.clarificationRequired());
     }
 
     @Test
@@ -97,6 +98,7 @@ class TaskOrchestratorServiceTest {
         assertEquals("ACTION_REQUEST", response.intentType());
         assertTrue(response.approvalRequired());
         assertEquals("token-1", response.approvalToken());
+        assertFalse(response.clarificationRequired());
     }
 
     @Test
@@ -111,17 +113,39 @@ class TaskOrchestratorServiceTest {
         when(taskRepository.findByTaskId("task-1")).thenReturn(Optional.of(task));
 
         when(taskExecutionService.execute(command)).thenReturn(new ToolCallResult("createSupportTicket", "ok"));
-        when(taskPlannerService.planNext(anyString())).thenReturn(new IntentDecision(IntentType.KNOWLEDGE_QA, "knowledge", null));
-        when(taskStepRepository.findByTaskId(anyString())).thenReturn(List.of());
-        when(taskStepRepository.nextStepNo(anyString())).thenReturn(1, 2);
-        when(retrievalService.retrieve("what is policy", 3, 0.65)).thenReturn(List.of());
-        when(contextAssembler.buildContext(any())).thenReturn("ctx");
-        when(knowledgeAssistant.answer(any(), any(), any())).thenReturn("done");
 
         AgentResponse response = orchestratorService.approveAndContinue("token-x");
 
-        assertEquals("KNOWLEDGE_QA", response.intentType());
-        assertEquals("done", response.answer());
+        assertEquals("ACTION_REQUEST", response.intentType());
+        assertEquals("ok", response.answer());
         assertFalse(response.approvalRequired());
+    }
+
+    @Test
+    void shouldWaitForClarificationThenContinue() {
+        when(taskPlannerService.planNext(anyString()))
+                .thenReturn(new IntentDecision(IntentType.CLARIFICATION, "need more", null))
+                .thenReturn(new IntentDecision(IntentType.KNOWLEDGE_QA, "knowledge", null));
+
+        when(taskStepRepository.findByTaskId(anyString())).thenReturn(List.of());
+        when(taskStepRepository.nextStepNo(anyString())).thenReturn(1, 2, 3, 4);
+
+        when(retrievalService.retrieve(anyString(), any(Integer.class), any(Double.class))).thenReturn(List.of());
+        when(contextAssembler.buildContext(any())).thenReturn("ctx");
+        when(knowledgeAssistant.answer(any(), any(), any())).thenReturn("final-answer");
+
+        Task waitingTask = new Task();
+        waitingTask.setTaskId("task-clarify");
+        waitingTask.setGoal("create ticket");
+        waitingTask.setStatus(TaskStatus.WAITING_CLARIFICATION);
+        when(taskRepository.findByTaskId("task-clarify")).thenReturn(Optional.of(waitingTask));
+
+        AgentResponse first = orchestratorService.askSync("u3", "create ticket");
+        assertTrue(first.clarificationRequired());
+
+        AgentResponse second = orchestratorService.clarifyAndContinue("task-clarify", "account zhangsan, vpn login failed");
+        assertEquals("KNOWLEDGE_QA", second.intentType());
+        assertEquals("final-answer", second.answer());
+        assertFalse(second.clarificationRequired());
     }
 }

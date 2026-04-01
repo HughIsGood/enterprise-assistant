@@ -233,6 +233,8 @@
     const chatLog = document.getElementById('chatLog');
     const chatStatusEl = document.getElementById('chatStatus');
 
+    let pendingClarificationTaskId = null;
+
     function setStatus(el, text, type) {
         el.textContent = text;
         el.className = 'status';
@@ -247,7 +249,7 @@
 
         const roleEl = document.createElement('span');
         roleEl.className = 'role';
-        roleEl.textContent = role === 'user' ? '你' : '助手';
+        roleEl.textContent = role === 'user' ? '\u4f60' : '\u52a9\u624b';
 
         const contentEl = document.createElement('div');
         contentEl.textContent = content;
@@ -261,7 +263,7 @@
     function parseResponsePayload(response, payload) {
         if (!response.ok) {
             const errMsg = typeof payload === 'string' ? payload : JSON.stringify(payload);
-            throw new Error(errMsg || '请求失败');
+            throw new Error(errMsg || '\u8bf7\u6c42\u5931\u8d25');
         }
         return payload;
     }
@@ -273,7 +275,7 @@
             userIdInput.value = userId;
         }
         if (!/^\d+$/.test(userId)) {
-            throw new Error('userId 只能是数字');
+            throw new Error('userId \u53ea\u80fd\u662f\u6570\u5b57');
         }
         return userId;
     }
@@ -282,16 +284,16 @@
         const file = fileInput.files && fileInput.files[0];
         const docType = docTypeSelect.value;
         if (!file) {
-            setStatus(uploadStatusEl, '请先选择文件', 'err');
+            setStatus(uploadStatusEl, '\u8bf7\u5148\u9009\u62e9\u6587\u4ef6', 'err');
             return;
         }
         if (!docType) {
-            setStatus(uploadStatusEl, '请选择文档类型', 'err');
+            setStatus(uploadStatusEl, '\u8bf7\u9009\u62e9\u6587\u6863\u7c7b\u578b', 'err');
             return;
         }
 
         uploadBtn.disabled = true;
-        setStatus(uploadStatusEl, '正在上传...');
+        setStatus(uploadStatusEl, '\u6b63\u5728\u4e0a\u4f20...');
 
         try {
             const formData = new FormData();
@@ -309,10 +311,10 @@
 
             const okMsg = typeof payload === 'string'
                 ? payload
-                : `上传成功: ${payload.fileName || file.name}，类型: ${payload.docType || docType}`;
+                : `\u4e0a\u4f20\u6210\u529f: ${payload.fileName || file.name}\uff0c\u7c7b\u578b: ${payload.docType || docType}`;
             setStatus(uploadStatusEl, okMsg, 'ok');
         } catch (e) {
-            setStatus(uploadStatusEl, `上传失败: ${e.message}`, 'err');
+            setStatus(uploadStatusEl, `\u4e0a\u4f20\u5931\u8d25: ${e.message}`, 'err');
         } finally {
             uploadBtn.disabled = false;
         }
@@ -326,14 +328,64 @@
         const contentType = response.headers.get('content-type') || '';
         const payload = contentType.includes('application/json') ? await response.json() : await response.text();
         parseResponsePayload(response, payload);
+        return payload;
+    }
 
-        return typeof payload === 'string' ? payload : (payload.answer || '审批执行完成');
+    async function clarifyAgentTask(taskId, message) {
+        const response = await fetch('/api/chat/agent/clarify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId, message })
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+        parseResponsePayload(response, payload);
+        return payload;
+    }
+
+    function buildAssistantText(payload) {
+        const answer = typeof payload === 'string' ? payload : (payload.answer || 'Agent \u672a\u8fd4\u56de\u5185\u5bb9');
+        const intentType = payload && payload.intentType ? `\n\u610f\u56fe: ${payload.intentType}` : '';
+        const tools = payload && payload.usedTools && payload.usedTools.length
+            ? `\n\u4f7f\u7528\u5de5\u5177: ${payload.usedTools.join(', ')}`
+            : '';
+        return `${answer}${intentType}${tools}`;
+    }
+
+    async function handleAgentPayload(payload) {
+        appendMessage('assistant', buildAssistantText(payload));
+
+        if (payload && payload.approvalRequired && payload.approvalToken) {
+            const confirmed = window.confirm('Agent \u8bf7\u6c42\u6267\u884c\u654f\u611f\u64cd\u4f5c\uff0c\u662f\u5426\u786e\u8ba4\u7ee7\u7eed\uff1f');
+            if (!confirmed) {
+                setStatus(chatStatusEl, '\u4f60\u5df2\u53d6\u6d88\u5ba1\u6279\u6267\u884c', 'ok');
+                return;
+            }
+
+            setStatus(chatStatusEl, '\u5df2\u786e\u8ba4\uff0c\u6b63\u5728\u6267\u884c\u5ba1\u6279...');
+            const approvePayload = await approveAgentAction(payload.approvalToken);
+            await handleAgentPayload(approvePayload);
+            return;
+        }
+
+        if (payload && payload.clarificationRequired && payload.taskId) {
+            pendingClarificationTaskId = payload.taskId;
+            setStatus(chatStatusEl, '\u8bf7\u76f4\u63a5\u5728\u8f93\u5165\u6846\u8865\u5145\u6f84\u6e05\u4fe1\u606f\u540e\u53d1\u9001\uff0c\u7cfb\u7edf\u5c06\u7ee7\u7eed\u6267\u884c\u3002', 'ok');
+            messageInput.placeholder = '\u8bf7\u8865\u5145\u6f84\u6e05\u4fe1\u606f\uff08\u4f8b\u5982\uff1a\u95ee\u9898\u73b0\u8c61\u3001\u5f71\u54cd\u8303\u56f4\u3001\u671f\u671b\u52a8\u4f5c\uff09';
+            messageInput.focus();
+            return;
+        }
+
+        pendingClarificationTaskId = null;
+        messageInput.placeholder = '\u8bf7\u8f93\u5165\u4f60\u7684\u95ee\u9898';
+        setStatus(chatStatusEl, 'Agent \u95ee\u7b54\u5b8c\u6210', 'ok');
     }
 
     async function sendAgentAsk() {
         const message = messageInput.value.trim();
         if (!message) {
-            setStatus(chatStatusEl, '请输入消息内容', 'err');
+            setStatus(chatStatusEl, '\u8bf7\u8f93\u5165\u6d88\u606f\u5185\u5bb9', 'err');
             return;
         }
 
@@ -341,48 +393,29 @@
             const userId = resolveUserId();
             agentAskBtn.disabled = true;
             appendMessage('user', message);
-            setStatus(chatStatusEl, 'Agent 问答处理中...');
 
-            const response = await fetch('/api/chat/agent/ask', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, message })
-            });
-
-            const contentType = response.headers.get('content-type') || '';
-            const payload = contentType.includes('application/json') ? await response.json() : await response.text();
-            parseResponsePayload(response, payload);
-
-            const answer = typeof payload === 'string' ? payload : (payload.answer || 'Agent 未返回内容');
-            const intentType = payload && payload.intentType ? `\n意图: ${payload.intentType}` : '';
-            const tools = payload && payload.usedTools && payload.usedTools.length
-                ? `\n使用工具: ${payload.usedTools.join(', ')}`
-                : '';
-
-            appendMessage('assistant', `${answer}${intentType}${tools}`);
-
-            if (payload && payload.intentType === 'ACTION_REQUEST') {
-                if (payload.approvalRequired && payload.approvalToken) {
-                    const confirmed = window.confirm('Agent 请求执行敏感操作，是否确认继续？');
-                    if (confirmed) {
-                        setStatus(chatStatusEl, '已确认，正在执行审批...');
-                        const approveAnswer = await approveAgentAction(payload.approvalToken);
-                        appendMessage('assistant', approveAnswer);
-                        setStatus(chatStatusEl, '审批执行完成', 'ok');
-                    } else {
-                        setStatus(chatStatusEl, '你已取消审批执行', 'ok');
-                    }
-                } else {
-                    setStatus(chatStatusEl, '当前 ACTION_REQUEST 无需审批或未返回 token', 'ok');
-                }
+            let payload;
+            if (pendingClarificationTaskId) {
+                setStatus(chatStatusEl, '\u6b63\u5728\u63d0\u4ea4\u6f84\u6e05\u4fe1\u606f\u5e76\u7ee7\u7eed\u6267\u884c...');
+                payload = await clarifyAgentTask(pendingClarificationTaskId, message);
             } else {
-                setStatus(chatStatusEl, 'Agent 问答完成', 'ok');
+                setStatus(chatStatusEl, 'Agent \u95ee\u7b54\u5904\u7406\u4e2d...');
+                const response = await fetch('/api/chat/agent/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, message })
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                payload = contentType.includes('application/json') ? await response.json() : await response.text();
+                parseResponsePayload(response, payload);
             }
 
+            await handleAgentPayload(payload);
             messageInput.value = '';
         } catch (e) {
-            appendMessage('assistant', `请求失败: ${e.message}`);
-            setStatus(chatStatusEl, `Agent 问答失败: ${e.message}`, 'err');
+            appendMessage('assistant', `\u8bf7\u6c42\u5931\u8d25: ${e.message}`);
+            setStatus(chatStatusEl, `Agent \u95ee\u7b54\u5931\u8d25: ${e.message}`, 'err');
         } finally {
             agentAskBtn.disabled = false;
             messageInput.focus();

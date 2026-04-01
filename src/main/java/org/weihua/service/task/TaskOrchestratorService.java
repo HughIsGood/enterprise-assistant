@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.weihua.assistant.KnowledgeAssistant;
-import org.weihua.model.document.DocumentType;
 import org.weihua.model.task.Task;
 import org.weihua.model.task.TaskApproval;
 import org.weihua.model.task.TaskGraphState;
@@ -111,6 +110,40 @@ public class TaskOrchestratorService {
                 result.result(),
                 List.of(result.toolName())
         );
+    }
+
+    public AgentResponse clarifyAndContinue(String taskId, String message) {
+        if (taskId == null || taskId.isBlank()) {
+            return AgentResponse.answer(IntentType.CLARIFICATION.name(), "缺少 taskId，无法继续。", List.of(), false, null);
+        }
+        if (message == null || message.isBlank()) {
+            return AgentResponse.clarification(IntentType.CLARIFICATION.name(), "请补充澄清信息后再继续。", taskId);
+        }
+
+        Task task = taskRepository.findByTaskId(taskId).orElse(null);
+        if (task == null) {
+            return AgentResponse.answer(IntentType.CLARIFICATION.name(), "任务不存在或已失效。", List.of(), false, null);
+        }
+        if (task.getStatus() != TaskStatus.WAITING_CLARIFICATION) {
+            return AgentResponse.answer(
+                    IntentType.CLARIFICATION.name(),
+                    "当前任务状态不是 WAITING_CLARIFICATION，无法执行澄清续跑。",
+                    List.of(),
+                    false,
+                    null,
+                    task.getTaskId()
+            );
+        }
+
+        appendStep(taskId, new IntentDecision(IntentType.CLARIFICATION, "用户补充信息", null), null, message, "USER_INPUT");
+
+        String resumedGoal = mergeGoalWithClarification(task.getGoal(), message);
+        task.setGoal(resumedGoal);
+        task.setStatus(TaskStatus.RUNNING);
+        task.setUpdateTime(LocalDateTime.now());
+        taskRepository.update(task);
+
+        return runGraph(task, resumedGoal, message, countDoneSteps(taskId));
     }
 
     public Task getTask(String taskId) {
@@ -276,7 +309,8 @@ public class TaskOrchestratorService {
                 "创建工单需要审批确认，是否继续？",
                 List.of(toolExecutionService.resolveToolName(ActionType.CREATE_TICKET)),
                 true,
-                token
+                token,
+                task.getTaskId()
         );
         return stateUpdateWithResponse(response);
     }
@@ -312,11 +346,18 @@ public class TaskOrchestratorService {
         if (task == null) {
             return stateUpdateWithResponse(AgentResponse.answer(IntentType.CLARIFICATION.name(), "请补充更多信息", List.of(), false, null));
         }
-        AgentResponse response = completeTask(
-                task,
+
+        String question = "我暂时无法准确判断你的请求类型。请补充更多信息，例如：你要创建什么工单、问题现象、影响范围。";
+
+        appendStep(task.getTaskId(), state.decision(), state.actionCommand(), question, "WAITING_INPUT");
+        task.setStatus(TaskStatus.WAITING_CLARIFICATION);
+        task.setUpdateTime(LocalDateTime.now());
+        taskRepository.update(task);
+
+        AgentResponse response = AgentResponse.clarification(
                 IntentType.CLARIFICATION.name(),
-                "我暂时无法准确判断你的请求类型。请补充更多信息。",
-                List.of()
+                question,
+                task.getTaskId()
         );
         return stateUpdateWithResponse(response);
     }
@@ -338,22 +379,22 @@ public class TaskOrchestratorService {
 
     private String buildPlannerInput(Task task, String goal, String latestObservation) {
         StringBuilder sb = new StringBuilder();
-        sb.append("任务目标: ").append(goal == null ? "" : goal).append("\\n");
+        sb.append("任务目标: ").append(goal == null ? "" : goal).append("\n");
 
         List<TaskStep> history = taskStepRepository.findByTaskId(task.getTaskId());
         if (!history.isEmpty()) {
-            sb.append("历史步骤:\\n");
+            sb.append("历史步骤:\n");
             for (TaskStep step : history) {
                 sb.append("- step=").append(step.getStepNo())
                         .append(", action=").append(step.getActionType())
                         .append(", status=").append(step.getStepStatus())
                         .append(", observation=").append(step.getObservationJson())
-                        .append("\\n");
+                        .append("\n");
             }
         }
 
         if (latestObservation != null && !latestObservation.isBlank()) {
-            sb.append("最新观察: ").append(latestObservation).append("\\n");
+            sb.append("最新观察: ").append(latestObservation).append("\n");
         }
         return sb.toString();
     }
@@ -363,7 +404,7 @@ public class TaskOrchestratorService {
         task.setFinalAnswer(answer);
         task.setUpdateTime(LocalDateTime.now());
         taskRepository.update(task);
-        return AgentResponse.answer(intentType, answer, usedTools, false, null);
+        return AgentResponse.answer(intentType, answer, usedTools, false, null, task.getTaskId());
     }
 
     private AgentResponse failTask(Task task, String message) {
@@ -372,7 +413,7 @@ public class TaskOrchestratorService {
         task.setUpdateTime(LocalDateTime.now());
         taskRepository.update(task);
         log.warn("Task failed: taskId={}, reason={}", task.getTaskId(), message);
-        return AgentResponse.answer(IntentType.ACTION_REQUEST.name(), message, List.of(), false, null);
+        return AgentResponse.answer(IntentType.ACTION_REQUEST.name(), message, List.of(), false, null, task.getTaskId());
     }
 
     private void appendStep(String taskId,
@@ -412,5 +453,17 @@ public class TaskOrchestratorService {
         return (int) taskStepRepository.findByTaskId(taskId).stream()
                 .filter(step -> "DONE".equals(step.getStepStatus()))
                 .count();
+    }
+
+    private String mergeGoalWithClarification(String originGoal, String clarification) {
+        String base = originGoal == null ? "" : originGoal.trim();
+        String extra = clarification == null ? "" : clarification.trim();
+        if (extra.isBlank()) {
+            return base;
+        }
+        if (base.isBlank()) {
+            return extra;
+        }
+        return base + "\n用户补充: " + extra;
     }
 }
