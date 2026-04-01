@@ -22,6 +22,7 @@
 
 3. 审批执行
 - 接口：`POST /api/chat/agent/approve?token=...`
+- 接口：`POST /api/chat/agent/clarify`（用户补充澄清信息后继续执行）
 - ACTION_REQUEST 需要审批时，前端弹窗确认后调用
 
 4. 动作命令与混合模式工具执行
@@ -129,7 +130,13 @@ sequenceDiagram
 - 前端确认后调用 `/api/chat/agent/approve?token=...`
 - `approveAndContinue` 直接执行工具并返回结果，不再二次路由
 
-4. 可观测性数据流
+4. 澄清数据流
+- 当路由为 `CLARIFICATION` 时，任务状态转为 `WAITING_CLARIFICATION`
+- Agent 返回 `clarificationRequired=true` 与 `taskId`
+- 用户在输入框补充信息后调用 `/api/chat/agent/clarify`，同一 task 继续执行
+
+5. 可观测性数据流
+
 - 检索层输出 score 与命中文档日志
 - 路由层输出原始/解析结果日志
 - 工具层输出调用起止日志

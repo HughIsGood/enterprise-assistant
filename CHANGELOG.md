@@ -10,6 +10,25 @@
 ---
 
 
+## [v0.1.7] - 2026-04-01
+- Commit: `9613533`
+- 标题: `feat: 支持澄清挂起续跑并优化前端澄清交互`
+
+### 新增
+- 新增接口：`POST /api/chat/agent/clarify`，用于在澄清后继续同一任务执行。
+- 新增请求模型：`ClarifyRequest(taskId, message)`。
+- 任务状态新增 `WAITING_CLARIFICATION`，支持挂起等待用户补充信息。
+
+### 优化
+- `AgentResponse` 扩展 `clarificationRequired` 与 `taskId`，前端可基于响应继续任务。
+- `TaskOrchestratorService` 支持 `clarificationNode -> WAITING_CLARIFICATION -> clarifyAndContinue` 续跑闭环。
+- 前端 `index.html` 优化澄清交互：不弹窗，改为提示用户直接在输入框补充后发送。
+
+### 影响范围
+- Agent 澄清中断与续跑交互链路（后端编排 + 前端问答面板）。
+
+---
+
 ## [v0.1.6] - 2026-03-31
 - Commit: `TBD`
 - 标题: `docs: add task-agent flowcharts and approval sequence diagram`
