@@ -84,7 +84,10 @@ flowchart TD
 
     K --> END((END))
     P --> END
-    Q --> END
+    Q --> W[task.status = WAITING_CLARIFICATION]
+    W --> END
+    U2[POST /api/chat/agent/clarify] --> R[clarifyAndContinue]
+    R --> C
     AP --> END
 ```
 
