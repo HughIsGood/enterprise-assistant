@@ -36,7 +36,7 @@ public class ChatController {
     }
 
     @GetMapping("/agent/tasks/{taskId}")
-    public TaskDetailResponse taskDetail(@PathVariable String taskId) {
+    public TaskDetailResponse taskDetail(@PathVariable("taskId") String taskId) {
         Task task = taskOrchestratorService.getTask(taskId);
         List<TaskStep> steps = taskOrchestratorService.getTaskSteps(taskId);
         return new TaskDetailResponse(task, steps);

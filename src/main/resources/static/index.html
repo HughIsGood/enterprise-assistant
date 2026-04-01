@@ -174,6 +174,59 @@
             gap: 12px;
         }
 
+
+        .timeline {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fbfdff;
+            padding: 12px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .timeline-title {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 0;
+        }
+
+        .timeline-track {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .timeline-node {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 12px;
+            text-align: center;
+            background: #f8fbff;
+            color: var(--muted);
+        }
+
+        .timeline-node.done {
+            border-color: #9cd3ab;
+            background: #ecf7ec;
+            color: var(--ok);
+        }
+
+        .timeline-node.active {
+            border-color: #8ab5ea;
+            background: #eef5ff;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .timeline-meta {
+            font-size: 12px;
+            color: var(--muted);
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 16px;
+        }
+
         @media (max-width: 640px) {
             .card { padding: 16px; }
             .chat-buttons { grid-template-columns: 1fr; }
@@ -218,6 +271,18 @@
         </div>
 
         <div id="chatStatus" class="status"></div>
+
+
+        <div class="timeline">
+            <p class="timeline-title">&#x4EFB;&#x52A1;&#x65F6;&#x95F4;&#x7EBF;&#xFF08;plan -&gt; approval -&gt; execute -&gt; end&#xFF09;</p>
+            <div class="timeline-track">
+                <div id="timelinePlan" class="timeline-node">plan</div>
+                <div id="timelineApproval" class="timeline-node">approval</div>
+                <div id="timelineExecute" class="timeline-node">execute</div>
+                <div id="timelineEnd" class="timeline-node">end</div>
+            </div>
+            <div id="timelineMeta" class="timeline-meta"></div>
+        </div>
     </div>
 </div>
 
@@ -233,7 +298,15 @@
     const chatLog = document.getElementById('chatLog');
     const chatStatusEl = document.getElementById('chatStatus');
 
+    const timelinePlanEl = document.getElementById('timelinePlan');
+    const timelineApprovalEl = document.getElementById('timelineApproval');
+    const timelineExecuteEl = document.getElementById('timelineExecute');
+    const timelineEndEl = document.getElementById('timelineEnd');
+    const timelineMetaEl = document.getElementById('timelineMeta');
+
     let pendingClarificationTaskId = null;
+    let activeTaskId = null;
+    let timelinePollingTimer = null;
 
     function setStatus(el, text, type) {
         el.textContent = text;
@@ -280,6 +353,102 @@
         return userId;
     }
 
+
+
+    function setTimelineNode(el, state, text) {
+        el.className = 'timeline-node';
+        if (state) {
+            el.classList.add(state);
+        }
+        if (text) {
+            el.textContent = text;
+        }
+    }
+
+    function resetTimeline() {
+        setTimelineNode(timelinePlanEl, '', 'plan');
+        setTimelineNode(timelineApprovalEl, '', 'approval');
+        setTimelineNode(timelineExecuteEl, '', 'execute');
+        setTimelineNode(timelineEndEl, '', 'end');
+        timelineMetaEl.textContent = '';
+    }
+
+    function stopTimelinePolling() {
+        if (timelinePollingTimer) {
+            clearInterval(timelinePollingTimer);
+            timelinePollingTimer = null;
+        }
+    }
+
+    function renderTimeline(detail) {
+        const task = detail && detail.task ? detail.task : {};
+        const steps = detail && Array.isArray(detail.steps) ? detail.steps : [];
+        const taskStatus = task && task.status ? task.status : '';
+
+        const hasPlan = steps.some((x) => x && x.stepStatus === 'PLANNED');
+        const hasDone = steps.some((x) => x && x.stepStatus === 'DONE');
+        const needsApproval = steps.some((x) => x && x.actionType === 'CREATE_TICKET');
+
+        const planState = hasPlan ? 'done' : (taskStatus ? 'active' : '');
+
+        let approvalState = '';
+        let approvalText = 'approval';
+        if (needsApproval) {
+            if (taskStatus === 'WAITING_APPROVAL') {
+                approvalState = 'active';
+            } else if (hasDone || taskStatus === 'COMPLETED' || taskStatus === 'FAILED') {
+                approvalState = 'done';
+            } else if (hasPlan) {
+                approvalState = 'active';
+            }
+        } else if (taskStatus === 'COMPLETED' || taskStatus === 'FAILED') {
+            approvalState = 'done';
+            approvalText = 'approval(skipped)';
+        }
+
+        const executeState = hasDone ? 'done' : (hasPlan && taskStatus === 'RUNNING' ? 'active' : '');
+        const endState = (taskStatus === 'COMPLETED' || taskStatus === 'FAILED') ? 'done' : '';
+
+        setTimelineNode(timelinePlanEl, planState, 'plan');
+        setTimelineNode(timelineApprovalEl, approvalState, approvalText);
+        setTimelineNode(timelineExecuteEl, executeState, 'execute');
+        setTimelineNode(timelineEndEl, endState, 'end');
+
+        timelineMetaEl.textContent = `taskId: ${task.taskId || activeTaskId || '-'}
+status: ${taskStatus || '-'}
+steps: ${steps.length}`;
+    }
+
+    async function refreshTimeline(taskId) {
+        if (!taskId) {
+            return null;
+        }
+        const response = await fetch(`/api/chat/agent/tasks/${encodeURIComponent(taskId)}`);
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+        parseResponsePayload(response, payload);
+        if (payload && typeof payload === 'object') {
+            renderTimeline(payload);
+        }
+        return payload;
+    }
+
+    function ensureTimelinePolling(taskId) {
+        stopTimelinePolling();
+        timelinePollingTimer = setInterval(async () => {
+            try {
+                const payload = await refreshTimeline(taskId);
+                const status = payload && payload.task ? payload.task.status : '';
+                if (status === 'COMPLETED' || status === 'FAILED') {
+                    stopTimelinePolling();
+                }
+            } catch (e) {
+                stopTimelinePolling();
+            }
+        }, 2000);
+    }
+
+    resetTimeline();
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files && fileInput.files[0];
         const docType = docTypeSelect.value;
@@ -356,6 +525,21 @@
     async function handleAgentPayload(payload) {
         appendMessage('assistant', buildAssistantText(payload));
 
+        if (payload && payload.taskId) {
+            activeTaskId = payload.taskId;
+            try {
+                const detail = await refreshTimeline(activeTaskId);
+                const status = detail && detail.task ? detail.task.status : '';
+                if (status !== 'COMPLETED' && status !== 'FAILED') {
+                    ensureTimelinePolling(activeTaskId);
+                } else {
+                    stopTimelinePolling();
+                }
+            } catch (e) {
+                // ignore timeline fetch error for main interaction flow
+            }
+        }
+
         if (payload && payload.approvalRequired && payload.approvalToken) {
             const confirmed = window.confirm('Agent \u8bf7\u6c42\u6267\u884c\u654f\u611f\u64cd\u4f5c\uff0c\u662f\u5426\u786e\u8ba4\u7ee7\u7eed\uff1f');
             if (!confirmed) {
@@ -395,6 +579,11 @@
             appendMessage('user', message);
 
             let payload;
+            if (!pendingClarificationTaskId) {
+                activeTaskId = null;
+                resetTimeline();
+                stopTimelinePolling();
+            }
             if (pendingClarificationTaskId) {
                 setStatus(chatStatusEl, '\u6b63\u5728\u63d0\u4ea4\u6f84\u6e05\u4fe1\u606f\u5e76\u7ee7\u7eed\u6267\u884c...');
                 payload = await clarifyAgentTask(pendingClarificationTaskId, message);
